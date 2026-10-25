@@ -5,6 +5,9 @@ const PORT = Number(process.env.PORT || 3000);
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
 const API = TOKEN ? `https://api.telegram.org/bot${TOKEN}` : null;
+const MAX_TOKEN = process.env.MAX_BOT_TOKEN;
+const MAX_USER_ID = process.env.MAX_USER_ID;
+const MAX_API = 'https://platform-api2.max.ru';
 
 app.get('/', (_req, res) => {
   res.json({ status: 'ok', service: 'telegram-taxi-request-bot', configured: Boolean(TOKEN) });
@@ -57,6 +60,22 @@ async function telegram(method, body = {}) {
   const data = await response.json();
   if (!data.ok) throw new Error(`Telegram API ${method}: ${data.description || response.status}`);
   return data.result;
+}
+
+
+async function sendMaxUser(userId, text) {
+  if (!MAX_TOKEN || !userId) throw new Error('MAX_BOT_TOKEN or MAX_USER_ID is not configured');
+  const url = new URL('/messages', MAX_API);
+  url.searchParams.set('user_id', String(userId));
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': MAX_TOKEN, 'content-type': 'application/json' },
+    body: JSON.stringify({ text, notify: true })
+  });
+  const body = await response.text();
+  if (!response.ok) throw new Error(`MAX API ${response.status}: ${body.slice(0, 500)}`);
+  console.log('Confirmed request delivered to MAX user', userId);
+  return body;
 }
 
 async function send(chatId, text, reply_markup) {
@@ -250,7 +269,16 @@ async function handleCallback(callback) {
     try {
       if (!ADMIN_CHAT_ID) throw new Error('TELEGRAM_ADMIN_CHAT_ID is not configured');
       await send(ADMIN_CHAT_ID, text);
-      await send(chatId, `Заявка № ${session.requestNo} отправлена Гале. Это подтверждение заявки, а не автоматический заказ такси.`);
+      let maxDelivered = false;
+      try {
+        await sendMaxUser(MAX_USER_ID, text);
+        maxDelivered = true;
+      } catch (maxErr) {
+        console.error('MAX delivery failed:', maxErr.message);
+      }
+      await send(chatId, maxDelivered
+        ? `Заявка № ${session.requestNo} отправлена Гале в Telegram и MAX. Это подтверждение заявки, а не автоматический заказ такси.`
+        : `Заявка № ${session.requestNo} отправлена Гале в Telegram. Доставка в MAX пока не настроена или не удалась; администратор проверит её отдельно. Это подтверждение заявки, а не автоматический заказ такси.`);
       nextRequestNumber++;
       sessions.delete(userId);
     } catch (err) {
