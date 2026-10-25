@@ -78,6 +78,50 @@ async function sendMaxUser(userId, text) {
   return body;
 }
 
+async function logToGoogleSheets(data, requestNo, fullText, deliveryStatus) {
+  const url = process.env.TAXI_SHEETS_WEBAPP_URL;
+  const secret = process.env.TAXI_SHEETS_SECRET;
+
+  if (!url || !secret) {
+    throw new Error('TAXI_SHEETS_WEBAPP_URL or TAXI_SHEETS_SECRET is not configured');
+  }
+
+  const payload = {
+    secret,
+    requestNo,
+    registeredAt: new Date().toISOString(),
+    requester: data.requester || '',
+    phone: data.phone || '',
+    passengerDetails: data.passengerDetails || '',
+    pickup: data.pickup || '',
+    destination: data.destination || '',
+    tripWhen: prettyWhen(data),
+    fullText,
+    deliveryStatus
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+    redirect: 'follow'
+  });
+
+  const responseText = await response.text();
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    throw new Error('Google Sheets returned an unexpected response');
+  }
+
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || `Google Sheets HTTP ${response.status}`);
+  }
+
+  console.log('Confirmed request logged to Google Sheets:', requestNo);
+}
+
 async function send(chatId, text, reply_markup) {
   const body = { chat_id: chatId, text, disable_web_page_preview: true };
   if (reply_markup) body.reply_markup = reply_markup;
@@ -275,6 +319,14 @@ async function handleCallback(callback) {
         maxDelivered = true;
       } catch (maxErr) {
         console.error('MAX delivery failed:', maxErr.message);
+      }
+      const deliveryStatus = maxDelivered
+        ? 'Telegram: доставлено; MAX: доставлено'
+        : 'Telegram: доставлено; MAX: ошибка доставки';
+      try {
+        await logToGoogleSheets(session.data, session.requestNo, text, deliveryStatus);
+      } catch (sheetsErr) {
+        console.error('Google Sheets logging failed; message delivery remains successful:', sheetsErr.message);
       }
       await send(chatId, maxDelivered
         ? `Заявка № ${session.requestNo} отправлена Гале в Telegram и MAX. Это подтверждение заявки, а не автоматический заказ такси.`
