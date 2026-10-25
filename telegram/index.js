@@ -130,8 +130,9 @@ function summary(d, requestNo) {
 async function showSummary(chatId, session) {
   session.requestNo = nextRequestNumber;
   const text = summary(session.data, session.requestNo);
-  await send(chatId, `Проверьте заявку перед отправкой:\n\n${text}\n\nЕсли нужно изменить ответы, нажмите «Начать заново» и заполните форму ещё раз.`, keyboard([
+  await send(chatId, `Проверьте заявку перед отправкой:\n\n${text}`, keyboard([
     [['✅ Подтвердить и отправить', 'confirm']],
+    [['✏️ Исправить ответ', 'edit_menu']],
     [['🔄 Начать заново', 'restart'], ['❌ Отменить', 'cancel']]
   ]));
   session.awaitingConfirmation = true;
@@ -158,8 +159,17 @@ async function handleMessage(message) {
     await send(chatId, 'Чтобы оформить заявку, отправьте /start.');
     return;
   }
+  if (session.awaitingEdit) {
+    const key = session.editKey;
+    session.data[key] = text;
+    session.awaitingEdit = false;
+    session.editKey = null;
+    session.awaitingConfirmation = false;
+    await showSummary(chatId, session);
+    return;
+  }
   if (session.awaitingConfirmation) {
-    await send(chatId, 'Пожалуйста, выберите кнопку под сводкой: подтвердить, начать заново или отменить.');
+    await send(chatId, 'Пожалуйста, выберите кнопку под сводкой: подтвердить, исправить ответ, начать заново или отменить.');
     return;
   }
   const q = getNextQuestion(session);
@@ -187,6 +197,34 @@ async function handleCallback(callback) {
   const data = callback.data;
   if (callback.id) await telegram('answerCallbackQuery', { callback_query_id: callback.id });
   const session = sessions.get(userId);
+  if (data === 'edit_menu' && session?.awaitingConfirmation) {
+    session.awaitingConfirmation = false;
+    const fields = QUESTIONS.filter(q => Object.hasOwn(session.data, q.key) && (!q.when || q.when(session.data)));
+    const rows = fields.map(q => [[q.key === 'pickup' ? 'Адрес подачи' : q.key === 'destination' ? 'Адрес назначения' : q.key === 'phone' ? 'Телефон' : q.text.slice(0, 55), `edit_${q.key}`]]);
+    await send(chatId, 'Какой ответ исправить?', keyboard([...rows, [['↩️ Назад к сводке', 'back_summary']]]));
+    session.editMenu = true;
+    return;
+  }
+  if (data === 'back_summary' && session) {
+    session.editMenu = false;
+    await showSummary(chatId, session);
+    return;
+  }
+  if (data?.startsWith('edit_') && session?.editMenu) {
+    const key = data.slice(5);
+    const q = QUESTIONS.find(item => item.key === key);
+    if (!q || !Object.hasOwn(session.data, key)) return;
+    session.editMenu = false;
+    session.editKey = key;
+    if (q.buttons) {
+      session.awaitingEdit = true;
+      await send(chatId, `Выберите новое значение: ${q.text}`, keyboard(q.buttons.map(item => [item])));
+    } else {
+      session.awaitingEdit = true;
+      await send(chatId, `Введите исправленный ответ: ${q.text}`);
+    }
+    return;
+  }
   if (data === 'restart') {
     sessions.set(userId, { chatId, index: 0, data: {}, awaitingConfirmation: false });
     await ask(chatId, sessions.get(userId));
