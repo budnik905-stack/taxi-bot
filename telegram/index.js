@@ -11,15 +11,6 @@ app.get('/', (_req, res) => {
 });
 app.listen(PORT, () => console.log(`Health server listening on ${PORT}`));
 
-if (!TOKEN) {
-  console.error('TELEGRAM_BOT_TOKEN is not configured; Telegram polling is disabled.');
-} else {
-  runBot().catch(err => {
-    console.error('Telegram bot stopped:', err);
-    process.exitCode = 1;
-  });
-}
-
 const sessions = new Map();
 let offset = 0;
 let nextRequestNumber = 1;
@@ -293,4 +284,13 @@ async function runBot() {
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
   }
+}
+
+if (!TOKEN) {
+  console.error('TELEGRAM_BOT_TOKEN is not configured; Telegram polling is disabled.');
+} else {
+  runBot().catch(err => {
+    console.error('Telegram bot stopped:', err);
+    process.exitCode = 1;
+  });
 }
