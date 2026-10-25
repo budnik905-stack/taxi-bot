@@ -214,7 +214,7 @@ async function handleCallback(callback) {
   if (!session || session.awaitingConfirmation) return;
   const q = getNextQuestion(session);
   if (!q?.buttons) return;
-  const allowed = q.buttons.flat().some(([, value]) => value === data);
+  const allowed = q.buttons.some(([, value]) => value === data);
   if (!allowed) return;
   session.data[q.key] = data;
   session.index++;
