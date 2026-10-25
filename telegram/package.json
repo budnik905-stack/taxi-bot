@@ -1,0 +1,13 @@
+{
+  "name": "telegram-taxi-request-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telegram assistant for collecting taxi requests and sending them to the coordinator",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
