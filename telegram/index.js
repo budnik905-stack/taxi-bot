@@ -197,6 +197,21 @@ async function handleCallback(callback) {
   const data = callback.data;
   if (callback.id) await telegram('answerCallbackQuery', { callback_query_id: callback.id });
   const session = sessions.get(userId);
+  if (session?.awaitingEdit && session.editKey) {
+    const q = QUESTIONS.find(item => item.key === session.editKey);
+    if (q?.buttons && q.buttons.some(([, value]) => value === data)) {
+      session.data[session.editKey] = data;
+      if (session.editKey === 'when' && data === 'now') { delete session.data.date; delete session.data.time; }
+      if (session.editKey === 'children' && data === 'no') { delete session.data.childrenAges; delete session.data.childSeat; }
+      if (session.editKey === 'pickupBarrier' && data === 'no') delete session.data.pickupBarrierHow;
+      if (session.editKey === 'destinationBarrier' && data === 'no') delete session.data.destinationBarrierHow;
+      if (session.editKey === 'wait' && data === 'no') delete session.data.waitDuration;
+      session.awaitingEdit = false;
+      session.editKey = null;
+      await showSummary(chatId, session);
+    }
+    return;
+  }
   if (data === 'edit_menu' && session?.awaitingConfirmation) {
     session.awaitingConfirmation = false;
     const fields = QUESTIONS.filter(q => Object.hasOwn(session.data, q.key) && (!q.when || q.when(session.data)));
