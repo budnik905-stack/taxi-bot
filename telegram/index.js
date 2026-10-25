@@ -143,6 +143,10 @@ async function handleMessage(message) {
   const userId = message.from?.id;
   const text = (message.text || '').trim();
   if (!chatId || !userId) return;
+  if (text === '/id') {
+    await send(chatId, `ID этого чата: ${chatId}\\nПередайте этот номер администратору для настройки получения заявок.`);
+    return;
+  }
   if (text === '/start' || text === '/new') {
     sessions.set(userId, { chatId, index: 0, data: {}, awaitingConfirmation: false });
     await send(chatId, 'Здравствуйте! Я помогу подготовить заявку на такси для Гали. Отвечайте на вопросы по очереди. Заказ автомобиля автоматически не выполняется.');
