@@ -3,6 +3,9 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Use the bundled Russian Trusted Root CA instead of disabling TLS verification.
+if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+
 const MAX_API_URL = 'https://platform-api2.max.ru';
 const ACCESS_TOKEN = process.env.MAX_BOT_TOKEN;
 
